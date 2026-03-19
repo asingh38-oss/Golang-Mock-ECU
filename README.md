@@ -51,4 +51,4 @@ go run main.go
 
 ## Architecture notes
 
-The design mirrors AUTOSAR's layered model — sensor abstraction, signal processing, and fault management are separated into distinct functions rather than mixed together. Goroutines stand in for the parallel runnable tasks that an AUTOSAR Runtime Environment (RTE) would schedule on real hardware.
+The design mirrors AUTOSAR's layered model: sensor abstraction, signal processing, and fault management are separated into distinct functions rather than mixed together. Goroutines stand in for the parallel runnable tasks that an AUTOSAR Runtime Environment (RTE) would schedule on real hardware.
