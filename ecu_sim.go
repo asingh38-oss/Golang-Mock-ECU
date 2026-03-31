@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// ECU config - stores basic info about the ECU
+// ECUConfig stores basic info about the ECU, things like its ID, name, and software version.
 type ECUConfig struct {
 	ECUID       int
 	ECUName     string
@@ -18,7 +18,8 @@ type ECUConfig struct {
 	SoftwareVer float64
 }
 
-// holds a single sensor reading
+// SensorReading holds a single snapshot from a sensor, including the signal name,
+// its value, the unit it's measured in, and when it was captured.
 type SensorReading struct {
 	SignalName string
 	Value      float64
@@ -26,61 +27,62 @@ type SensorReading struct {
 	Timestamp  time.Time
 }
 
-// Program 1 - showing different data types and some built-in methods
+// Program 1 shows how an ECU works with different data types and the standard library
+// methods that come up constantly in signal processing and diagnostics.
 func demonstrateDataTypes() {
 	fmt.Println("========================================")
 	fmt.Println("  Program 1: Data Types & Built-in Methods")
 	fmt.Println("========================================")
 
-	// int - using RPM as an example
+	// using RPM as a concrete example of integer signal values
 	var rpmRaw int = 3450
 	var rpmMax int = 8000
 	fmt.Printf("\n[int] Raw RPM: %d | Max RPM: %d\n", rpmRaw, rpmMax)
 
-	// strconv.Itoa converts int to string
+	// strconv.Itoa converts an int to a string, useful when logging or formatting output
 	rpmStr := strconv.Itoa(rpmRaw)
 	fmt.Printf("  strconv.Itoa -> RPM as string: \"%s\"\n", rpmStr)
 
-	// strconv.Atoi does the opposite
+	// strconv.Atoi goes the other way, parsing a string back into an int
 	parsedRPM, err := strconv.Atoi("5200")
 	if err == nil {
 		fmt.Printf("  strconv.Atoi -> Parsed RPM from string: %d\n", parsedRPM)
 	}
 
-	// float64 - voltage and temp readings
+	// float64 is the natural fit for analog readings like voltage and temperature
 	var voltage float64 = 13.756
 	var tempCelsius float64 = 87.345
 	fmt.Printf("\n[float64] Battery Voltage: %.3f V | Engine Temp: %.3f C\n", voltage, tempCelsius)
 
-	// math.Round to clean up the value
+	// math.Round cleans up noisy sensor values before logging or comparing
 	fmt.Printf("  math.Round  -> Voltage rounded: %.1f V\n", math.Round(voltage*10)/10)
 
-	// math.Abs to get how far off we are from nominal voltage
+	// math.Abs gives us the magnitude of deviation from a nominal value
 	nominalVoltage := 14.4
 	delta := math.Abs(nominalVoltage - voltage)
 	fmt.Printf("  math.Abs    -> Voltage delta from nominal (%.1fV): %.3f V\n", nominalVoltage, delta)
 
-	// string - signal names come in messy sometimes
+	// signal names coming from different ECUs often have inconsistent formatting
 	var signalName string = "  engine_speed_rpm  "
 	var ecuLabel string = "POWERTRAIN_ECU_v2"
 	fmt.Printf("\n[string] Raw Signal Name: \"%s\"\n", signalName)
 
-	// trim the whitespace
+	// TrimSpace strips the leading and trailing whitespace before we do anything with it
 	trimmed := strings.TrimSpace(signalName)
 	fmt.Printf("  strings.TrimSpace  -> \"%s\"\n", trimmed)
 
-	// clean it up for display
+	// normalize the signal name to a standard display format
 	formatted := strings.ToUpper(strings.Replace(trimmed, "_", ".", -1))
 	fmt.Printf("  strings.ToUpper + strings.Replace -> \"%s\"\n", formatted)
 
 	fmt.Printf("  strings.Contains (\"POWERTRAIN\" in label): %v\n", strings.Contains(ecuLabel, "POWERTRAIN"))
 
-	// bool - fault flags
+	// booleans represent fault flags and mode states throughout the ECU
 	var dtcActive bool = false
 	var limpModeEnabled bool = tempCelsius > 85.0
 	fmt.Printf("\n[bool] DTC Active: %v | Limp Mode Enabled: %v\n", dtcActive, limpModeEnabled)
 
-	// format the bools into a readable status string
+	// format both flags into a single status string the way a real DTC log might look
 	dtcStatus := fmt.Sprintf("DTC_STATUS=%s | LIMP_MODE=%s",
 		strings.ToUpper(strconv.FormatBool(dtcActive)),
 		strings.ToUpper(strconv.FormatBool(limpModeEnabled)),
@@ -88,20 +90,21 @@ func demonstrateDataTypes() {
 	fmt.Printf("  fmt.Sprintf -> \"%s\"\n", dtcStatus)
 }
 
-// Program 2 - data structures and control structures
+// Program 2 shows how Go's data structures map onto common ECU patterns
+// like signal tables, threshold maps, and component configuration structs.
 func demonstrateDataStructures() {
 	fmt.Println("\n========================================")
 	fmt.Println("  Program 2: Data Structures & Control Structures")
 	fmt.Println("========================================")
 
-	// array of CAN bus IDs (fixed size)
+	// arrays work well for fixed sets like CAN bus IDs, which don't change at runtime
 	var canBusIDs [4]int = [4]int{0x100, 0x200, 0x300, 0x400}
 	fmt.Println("\n[Array] CAN Bus IDs:")
 	for i, id := range canBusIDs {
 		fmt.Printf("  canBusIDs[%d] = 0x%X\n", i, id)
 	}
 
-	// slice of sensor readings - more flexible than an array
+	// slices are more flexible and work better for sensor readings that grow over time
 	readings := []SensorReading{
 		{SignalName: "THROTTLE_POS", Value: 45.2, Unit: "%"},
 		{SignalName: "COOLANT_TEMP", Value: 92.1, Unit: "C"},
@@ -118,7 +121,7 @@ func demonstrateDataStructures() {
 	avg := total / float64(len(readings))
 	fmt.Printf("  Total signals: %d | Avg value: %.2f\n", len(readings), avg)
 
-	// check each reading against a threshold - basic fault detection
+	// a map is a natural fit for threshold tables since we look up by signal name
 	fmt.Println("\n[if-else] Fault Detection:")
 	faultThresholds := map[string]float64{
 		"COOLANT_TEMP": 90.0,
@@ -139,7 +142,7 @@ func demonstrateDataStructures() {
 		}
 	}
 
-	// struct example - ECU config
+	// structs are how we represent ECU components with multiple fields of different types
 	ecu := ECUConfig{
 		ECUID:       1,
 		ECUName:     "POWERTRAIN_ECU",
@@ -150,7 +153,8 @@ func demonstrateDataStructures() {
 		ecu.ECUID, ecu.ECUName, ecu.IsActive, ecu.SoftwareVer)
 }
 
-// each sensor runs in its own goroutine and sends readings to the channel
+// simulateSensor runs as a goroutine and generates random readings for a single sensor.
+// Each call to this represents one independent sensor node running on its own schedule.
 func simulateSensor(name string, unit string, min, max float64, ch chan<- SensorReading, wg *sync.WaitGroup) {
 	defer wg.Done()
 	for i := 0; i < 3; i++ {
@@ -166,7 +170,8 @@ func simulateSensor(name string, unit string, min, max float64, ch chan<- Sensor
 	}
 }
 
-// Program 3 - concurrency with goroutines and channels, plus panic/recover
+// Program 3 demonstrates concurrency using goroutines and channels, which maps well
+// onto how an AUTOSAR RTE schedules parallel runnable tasks across software components.
 func demonstrateConcurrency() {
 	fmt.Println("\n========================================")
 	fmt.Println("  Program 3: Concurrency & Exception Handling")
@@ -186,20 +191,20 @@ func demonstrateConcurrency() {
 		{"VEHICLE_SPEED", "km/h", 0, 120},
 	}
 
-	// spin up a goroutine for each sensor
+	// each sensor gets its own goroutine so they all run independently
 	fmt.Println("\n[Goroutines] Starting sensor streams...")
 	for _, s := range sensors {
 		wg.Add(1)
 		go simulateSensor(s.name, s.unit, s.min, s.max, ch, &wg)
 	}
 
-	// close the channel once all goroutines are done
+	// close the channel once all sensor goroutines have finished sending
 	go func() {
 		wg.Wait()
 		close(ch)
 	}()
 
-	// read everything off the channel as it comes in
+	// drain the channel as readings come in, this blocks until the channel is closed
 	fmt.Println("\n[Channel] Incoming readings:")
 	count := 0
 	for r := range ch {
@@ -209,12 +214,15 @@ func demonstrateConcurrency() {
 	}
 	fmt.Printf("\n  Total readings: %d from %d sensors\n", count, len(sensors))
 
-	// panic/recover - simulating what happens if the ECU gets bad input
+	// panic/recover lets the ECU catch runtime errors and enter a safe fallback state
+	// instead of crashing the whole process
 	fmt.Println("\n[Panic/Recover] Testing ECU fault recovery:")
-	safeECUOperation(0)   // divide by zero on purpose to trigger panic
-	safeECUOperation(250) // normal case
+	safeECUOperation(0)   // passes zero on purpose to trigger a divide by zero panic
+	safeECUOperation(250) // normal case, should complete without issues
 }
 
+// safeECUOperation wraps a potentially dangerous calculation in a recover block.
+// If anything panics inside, it gets caught and the ECU logs a fault instead of crashing.
 func safeECUOperation(loadValue int) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -235,6 +243,7 @@ func main() {
 	demonstrateDataTypes()
 	demonstrateDataStructures()
 	demonstrateConcurrency()
+	demonstrateCANLayer()
 
 	fmt.Println("\n========================================")
 	fmt.Println("  Done")
