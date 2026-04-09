@@ -244,6 +244,9 @@ func main() {
 	demonstrateDataStructures()
 	demonstrateConcurrency()
 	demonstrateCANLayer()
+	demonstrateDriveMode()
+	demonstrateScheduler()
+	demonstrateSignalValidation()
 
 	fmt.Println("\n========================================")
 	fmt.Println("  Done")
