@@ -1,8 +1,6 @@
 # Golang Mock ECU
 
-A mock Electronic Control Unit (ECU) built in Go, simulating core concepts from the AUTOSAR automotive software architecture. The project covers sensor signal processing, CAN bus communication, concurrent task scheduling, and fault detection. Essentially the kind of software that runs inside a real car's computer, but written in Go and running on a laptop.
-
-Built for ITSC 4102 at UNC Charlotte.
+A mock Electronic Control Unit built in Go that simulates how real automotive ECU software works. We built this for ITCS 4102 at UNC Charlotte as a way to explore Go while modeling core AUTOSAR concepts like CAN bus communication, sensor processing, fault detection, and drive mode logic.
 
 ## Team
 
@@ -10,31 +8,37 @@ Aditya Singh, Hunter Wells, Jubin Kim, Kasper Dziedzic, Nick Goff
 
 ## What it does
 
-The simulator is split into four programs that build on each other. Each one introduces new Go concepts while staying grounded in how real automotive software actually works.
+The project is split across eight files, each handling a different layer of the simulation. They build on each other so reading them in order makes sense.
 
-**Program 1** covers the basics of how an ECU handles raw signal data. It parses RPM values from strings, rounds voltage readings, cleans up messy signal names, and evaluates fault flags like DTC status and limp mode. Simple operations, but exactly the kind of thing embedded software runs through constantly.
+**ecu_sim.go** is where everything starts. It covers the three core programs for the course: data types and signal processing, data structures and fault detection, and concurrent sensor streaming with goroutine based error recovery.
 
-**Program 2** models CAN bus signal processing using arrays, slices, maps, and structs. It includes a fault detection loop that checks live sensor readings like coolant temp, battery voltage, and oil pressure against configurable thresholds and flags anything out of range.
+**can_layer.go** adds a virtual CAN bus. Each sensor gets its own transmitter goroutine with a CAN ID, encodes its value into an 8 byte IEEE 754 frame, and sends it over a buffered channel. A receiver on the other end decodes each frame and measures latency.
 
-**Program 3** simulates real-time sensor streaming using goroutines and channels. Each sensor runs as its own independent task and pushes readings to a shared channel, which mirrors how parallel runnable tasks work in an AUTOSAR Runtime Environment. There is also a panic/recover example showing how the ECU recovers from bad input without taking down the whole process.
+**drive_mode.go** is a state machine that switches between ECO, NORMAL, SPORT, and LIMP based on live sensor values. LIMP always takes priority if something critical is wrong.
 
-**Program 4** is the CAN layer. Each sensor becomes a proper CAN transmitter node with its own CAN ID (0x100 for RPM, 0x101 for coolant temp, and so on). Values get packed into 8-byte CAN frames using IEEE 754 encoding and broadcast over a virtual bus implemented with a buffered Go channel. A receiver goroutine on the other end decodes each frame back into a SensorReading, the same struct the rest of the simulator uses. Frame latency is tracked per message and typically lands between 45 and 120 microseconds.
+**scheduler.go** runs each signal on its own timer to match real CAN matrix timing. RPM and speed fire every 20ms, throttle every 50ms, and coolant and battery every 100ms.
+
+**fault_logger.go and obd_interface.go** validate sensor readings against known ranges and log Diagnostic Trouble Codes when something goes out of bounds. The OBD interface simulates a scan tool with service modes 01 through 09.
+
+**sensor_model.go** replaces random values with a physics simulation where RPM, coolant temp, battery voltage, oil pressure, and vehicle speed all respond to throttle and gear input.
+
+**ecuserver.go** spins up an HTTP server on port 8080 so you can query live sensor data and fault codes from a browser.
 
 ## How it maps to AUTOSAR
 
-This is not a real AUTOSAR stack, but the structure is intentionally similar to one.
-
-| AUTOSAR Concept | What we do in Go |
+| AUTOSAR Concept | What we built |
 |---|---|
-| Software Components (SWCs) | Individual goroutines per sensor signal |
-| Runtime Environment (RTE) | Go channels passing data between components |
-| CAN Interface layer | can_layer.go handles frame encoding and the virtual bus |
-| Diagnostic Event Manager (DEM) | Fault threshold checks in Program 2 |
-| Runnable tasks | Goroutines with ticker-based cycle timing |
+| Software Components | Goroutines per sensor signal |
+| Runtime Environment | Go channels between components |
+| CAN Interface | can_layer.go frame encoding and virtual bus |
+| Diagnostic Event Manager | fault_logger.go DTC generation |
+| Periodic Runnable Tasks | scheduler.go ticker based goroutines |
+| State Management | drive_mode.go FSM |
+| Diagnostic Communication Manager | obd_interface.go service modes |
 
 ## Stack
 
-Go 1.24, developed on WSL2 running on Windows. Key packages used are `encoding/binary`, `math`, `sync`, and `time`. No external dependencies.
+Go 1.24 on WSL2 running on Windows. No external dependencies, everything uses the standard library.
 
 ## Running it
 
@@ -45,42 +49,26 @@ go mod tidy
 go run .
 ```
 
-## Sample output
+The HTTP server starts at the end and blocks on port 8080. Press Ctrl+C to stop. While it is running you can hit these in a browser:
 
 ```
-╔══════════════════════════════════════════╗
-║     AUTOSAR Mock ECU Simulator - Go      ║
-╚══════════════════════════════════════════╝
-
-[Goroutines] Starting sensor streams...
-
-[Channel] Incoming readings:
-  [21:50:45.742] COOLANT_TEMP    = 103.08 C
-  [21:50:45.742] BATTERY_VOLT    =  13.90 V
-  [21:50:45.891] RPM             = 5185.78 rpm
-
-[Panic/Recover] Testing ECU fault recovery:
-  PANIC RECOVERED: runtime error: integer divide by zero - entering safe mode
-  ECU load calc: 1000 / 250 = 4
-
-========================================
-  CAN Layer: Virtual Bus Simulation
-========================================
-
-  [TX] ID=0x100 | RPM             = 5686.93 rpm   | DLC=8 | Bytes=40B636EE147AE148
-  [RX] ID=0x100 | RPM             = 5686.93 rpm   | Latency=69µs
-  [TX] ID=0x101 | COOLANT_TEMP    =   85.68 C     | DLC=8 | Bytes=40556B851EB851EC
-  [RX] ID=0x101 | COOLANT_TEMP    =   85.68 C     | Latency=65µs
-
-  [RX] Done. Received 12 frames total.
+http://localhost:8080/sensors
+http://localhost:8080/sensors/RPM
+http://localhost:8080/faults
 ```
 
 ## Project structure
 
 ```
 Golang-Mock-ECU/
-├── ecu_sim.go      # Programs 1 through 3: data types, structures, concurrency
-├── can_layer.go    # Program 4: CAN bus simulation and frame encoding
+├── ecu_sim.go        # programs 1 through 3: data types, structures, concurrency
+├── can_layer.go      # CAN bus simulation and frame encoding
+├── drive_mode.go     # drive mode state machine
+├── scheduler.go      # periodic message scheduler
+├── fault_logger.go   # signal validation and DTC logging
+├── obd_interface.go  # OBD-II scan tool simulation
+├── sensor_model.go   # physics coupled sensor model
+├── ecuserver.go      # ECU HTTP server
 ├── go.mod
 └── README.md
 ```
